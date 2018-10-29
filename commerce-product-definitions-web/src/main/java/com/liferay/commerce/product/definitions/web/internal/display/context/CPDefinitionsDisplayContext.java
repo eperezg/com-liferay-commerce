@@ -14,8 +14,13 @@
 
 package com.liferay.commerce.product.definitions.web.internal.display.context;
 
+import com.liferay.asset.display.page.item.selector.criterion.AssetDisplayPageSelectorCriterion;
+import com.liferay.asset.display.page.model.AssetDisplayPageEntry;
+import com.liferay.asset.display.page.service.AssetDisplayPageEntryLocalServiceUtil;
 import com.liferay.asset.kernel.model.AssetCategory;
+import com.liferay.asset.kernel.model.AssetEntry;
 import com.liferay.asset.kernel.model.AssetVocabulary;
+import com.liferay.asset.kernel.service.AssetEntryLocalServiceUtil;
 import com.liferay.asset.kernel.service.AssetVocabularyServiceUtil;
 import com.liferay.commerce.product.definitions.web.display.context.BaseCPDefinitionsSearchContainerDisplayContext;
 import com.liferay.commerce.product.definitions.web.internal.util.CPDefinitionsPortletUtil;
@@ -29,6 +34,8 @@ import com.liferay.item.selector.ItemSelector;
 import com.liferay.item.selector.ItemSelectorReturnType;
 import com.liferay.item.selector.criteria.UUIDItemSelectorReturnType;
 import com.liferay.layout.item.selector.criterion.LayoutItemSelectorCriterion;
+import com.liferay.layout.page.template.model.LayoutPageTemplateEntry;
+import com.liferay.layout.page.template.service.LayoutPageTemplateEntryLocalServiceUtil;
 import com.liferay.petra.string.StringPool;
 import com.liferay.portal.kernel.dao.search.SearchContainer;
 import com.liferay.portal.kernel.exception.PortalException;
@@ -44,12 +51,15 @@ import com.liferay.portal.kernel.search.Sort;
 import com.liferay.portal.kernel.security.permission.ActionKeys;
 import com.liferay.portal.kernel.security.permission.resource.ModelResourcePermission;
 import com.liferay.portal.kernel.security.permission.resource.PortletResourcePermission;
+import com.liferay.portal.kernel.service.ClassNameLocalServiceUtil;
+import com.liferay.portal.kernel.service.LayoutLocalServiceUtil;
 import com.liferay.portal.kernel.service.WorkflowDefinitionLinkLocalServiceUtil;
 import com.liferay.portal.kernel.theme.ThemeDisplay;
 import com.liferay.portal.kernel.util.HtmlUtil;
 import com.liferay.portal.kernel.util.ListUtil;
 import com.liferay.portal.kernel.util.OrderByComparator;
 import com.liferay.portal.kernel.util.ParamUtil;
+import com.liferay.portal.kernel.util.PortalUtil;
 import com.liferay.portal.kernel.util.StringBundler;
 import com.liferay.portal.kernel.util.Validator;
 import com.liferay.portal.kernel.util.WebKeys;
@@ -87,12 +97,68 @@ public class CPDefinitionsDisplayContext
 
 		setDefaultOrderByType("desc");
 
+		_request = httpServletRequest;
 		_cpDefinitionHelper = cpDefinitionHelper;
 		_cpDefinitionModelResourcePermission =
 			cpDefinitionModelResourcePermission;
 		_cpDefinitionService = cpDefinitionService;
 		_itemSelector = itemSelector;
 		_portletResourcePermission = portletResourcePermission;
+	}
+
+	public AssetDisplayPageEntry getAssetDisplayPageEntry()
+		throws PortalException {
+
+		if (_assetDisplayPageEntry != null) {
+			return _assetDisplayPageEntry;
+		}
+
+		CPDefinition cpDefinition = getCPDefinition();
+
+		if (cpDefinition == null) {
+			return _assetDisplayPageEntry;
+		}
+
+		long classNameId = ClassNameLocalServiceUtil.getClassNameId(
+			CPDefinition.class.getName());
+
+		AssetEntry assetEntry = AssetEntryLocalServiceUtil.fetchEntry(
+			classNameId, cpDefinition.getCPDefinitionId());
+
+		if (assetEntry == null) {
+			return _assetDisplayPageEntry;
+		}
+
+		AssetDisplayPageEntry assetDisplayPageEntry =
+			AssetDisplayPageEntryLocalServiceUtil.fetchAssetDisplayPageEntry(
+				assetEntry.getGroupId(), assetEntry.getClassNameId(),
+				assetEntry.getClassPK());
+
+		if (assetDisplayPageEntry != null) {
+			_assetDisplayPageEntry = assetDisplayPageEntry;
+		}
+
+		return _assetDisplayPageEntry;
+	}
+
+	public long getAssetDisplayPageId() throws PortalException {
+		if (_assetDisplayPageId != null) {
+			return _assetDisplayPageId;
+		}
+
+		long assetDisplayPageId = 0;
+
+		AssetDisplayPageEntry assetDisplayPageEntry =
+			getAssetDisplayPageEntry();
+
+		if (assetDisplayPageEntry != null) {
+			assetDisplayPageId =
+				assetDisplayPageEntry.getLayoutPageTemplateEntryId();
+		}
+
+		_assetDisplayPageId = assetDisplayPageId;
+
+		return _assetDisplayPageId;
 	}
 
 	public String getCategorySelectorURL(String eventName) throws Exception {
@@ -113,13 +179,59 @@ public class CPDefinitionsDisplayContext
 		return portletURL.toString();
 	}
 
+	public String getDisplayPageName() throws Exception {
+		String assetDisplayPageName = _getAssetDisplayPageName();
+
+		if (Validator.isNotNull(assetDisplayPageName)) {
+			return assetDisplayPageName;
+		}
+
+		String layoutUuid = getLayoutUuid();
+
+		if (Validator.isNull(layoutUuid)) {
+			return StringPool.BLANK;
+		}
+
+		ThemeDisplay themeDisplay = (ThemeDisplay)_request.getAttribute(
+			WebKeys.THEME_DISPLAY);
+
+		Layout selLayout = LayoutLocalServiceUtil.fetchLayoutByUuidAndGroupId(
+			layoutUuid, themeDisplay.getSiteGroupId(), false);
+
+		if (selLayout == null) {
+			selLayout = LayoutLocalServiceUtil.fetchLayoutByUuidAndGroupId(
+				layoutUuid, themeDisplay.getSiteGroupId(), true);
+		}
+
+		if (selLayout != null) {
+			return getLayoutBreadcrumb(selLayout);
+		}
+
+		return StringPool.BLANK;
+	}
+
 	public String getItemSelectorUrl() {
 		RequestBackedPortletURLFactory requestBackedPortletURLFactory =
 			RequestBackedPortletURLFactoryUtil.create(
 				cpRequestHelper.getRenderRequest());
 
+		long displayPageClassNameId = PortalUtil.getClassNameId(
+			CPDefinition.class.getName());
+
+		AssetDisplayPageSelectorCriterion assetDisplayPageSelectorCriterion =
+			new AssetDisplayPageSelectorCriterion();
+
+		assetDisplayPageSelectorCriterion.setClassNameId(
+			displayPageClassNameId);
+
+		assetDisplayPageSelectorCriterion.setDesiredItemSelectorReturnTypes(
+			Collections.<ItemSelectorReturnType>singletonList(
+				new UUIDItemSelectorReturnType()));
+
 		LayoutItemSelectorCriterion layoutItemSelectorCriterion =
 			new LayoutItemSelectorCriterion();
+
+		layoutItemSelectorCriterion.setCheckDisplayPage(true);
 
 		layoutItemSelectorCriterion.setDesiredItemSelectorReturnTypes(
 			Collections.<ItemSelectorReturnType>singletonList(
@@ -127,7 +239,7 @@ public class CPDefinitionsDisplayContext
 
 		PortletURL itemSelectorURL = _itemSelector.getItemSelectorURL(
 			requestBackedPortletURLFactory, "selectDisplayPage",
-			layoutItemSelectorCriterion);
+			assetDisplayPageSelectorCriterion, layoutItemSelectorCriterion);
 
 		return itemSelectorURL.toString();
 	}
@@ -401,11 +513,32 @@ public class CPDefinitionsDisplayContext
 			ActionKeys.VIEW);
 	}
 
+	private String _getAssetDisplayPageName() throws PortalException {
+		long assetDisplayPageId = getAssetDisplayPageId();
+
+		if (assetDisplayPageId == 0) {
+			return StringPool.BLANK;
+		}
+
+		LayoutPageTemplateEntry layoutPageTemplateEntry =
+			LayoutPageTemplateEntryLocalServiceUtil.
+				fetchLayoutPageTemplateEntry(assetDisplayPageId);
+
+		if (layoutPageTemplateEntry == null) {
+			return StringPool.BLANK;
+		}
+
+		return layoutPageTemplateEntry.getName();
+	}
+
+	private AssetDisplayPageEntry _assetDisplayPageEntry;
+	private Long _assetDisplayPageId;
 	private final CPDefinitionHelper _cpDefinitionHelper;
 	private final ModelResourcePermission<CPDefinition>
 		_cpDefinitionModelResourcePermission;
 	private final CPDefinitionService _cpDefinitionService;
 	private final ItemSelector _itemSelector;
 	private final PortletResourcePermission _portletResourcePermission;
+	private final HttpServletRequest _request;
 
 }

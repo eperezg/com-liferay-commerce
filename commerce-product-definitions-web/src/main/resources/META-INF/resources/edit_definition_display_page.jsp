@@ -25,19 +25,9 @@ long cpDefinitionId = cpDefinitionsDisplayContext.getCPDefinitionId();
 
 String layoutUuid = cpDefinitionsDisplayContext.getLayoutUuid();
 
-String layoutBreadcrumb = StringPool.BLANK;
+long assetDisplayPageId = cpDefinitionsDisplayContext.getAssetDisplayPageId();
 
-if (Validator.isNotNull(layoutUuid)) {
-	Layout selLayout = LayoutLocalServiceUtil.fetchLayoutByUuidAndGroupId(layoutUuid, themeDisplay.getSiteGroupId(), false);
-
-	if (selLayout == null) {
-		selLayout = LayoutLocalServiceUtil.fetchLayoutByUuidAndGroupId(layoutUuid, themeDisplay.getSiteGroupId(), true);
-	}
-
-	if (selLayout != null) {
-		layoutBreadcrumb = cpDefinitionsDisplayContext.getLayoutBreadcrumb(selLayout);
-	}
-}
+String displayPageName = cpDefinitionsDisplayContext.getDisplayPageName();
 %>
 
 <portlet:actionURL name="editProductDefinition" var="editProductDefinitionDisplayPageActionURL" />
@@ -53,18 +43,20 @@ if (Validator.isNotNull(layoutUuid)) {
 		<aui:fieldset>
 			<aui:input id="pagesContainerInput" ignoreRequestValue="<%= true %>" name="layoutUuid" type="hidden" value="<%= layoutUuid %>" />
 
+			<aui:input id="assetDisplayPageIdInput" ignoreRequestValue="<%= true %>" name="assetDisplayPageId" type="hidden" value="<%= assetDisplayPageId %>" />
+
 			<aui:field-wrapper helpMessage="product-display-page-help" label="product-display-page">
 				<p class="text-default">
-					<span class="<%= Validator.isNull(layoutBreadcrumb) ? "hide" : StringPool.BLANK %>" id="<portlet:namespace />displayPageItemRemove" role="button">
+					<span class="<%= Validator.isNull(displayPageName) ? "hide" : StringPool.BLANK %>" id="<portlet:namespace />displayPageItemRemove" role="button">
 						<aui:icon cssClass="icon-monospaced" image="times" markupView="lexicon" />
 					</span>
 					<span id="<portlet:namespace />displayPageNameInput">
 						<c:choose>
-							<c:when test="<%= Validator.isNull(layoutBreadcrumb) %>">
+							<c:when test="<%= Validator.isNull(displayPageName) %>">
 								<span class="text-muted"><liferay-ui:message key="none" /></span>
 							</c:when>
 							<c:otherwise>
-								<%= layoutBreadcrumb %>
+								<%= displayPageName %>
 							</c:otherwise>
 						</c:choose>
 					</span>
@@ -85,6 +77,7 @@ if (Validator.isNotNull(layoutUuid)) {
 </aui:form>
 
 <aui:script use="liferay-item-selector-dialog">
+	var assetDisplayPageIdInput = $('#<portlet:namespace />assetDisplayPageIdInput');
 	var displayPageItemContainer = $('#<portlet:namespace />displayPageItemContainer');
 	var displayPageItemRemove = $('#<portlet:namespace />displayPageItemRemove');
 	var displayPageNameInput = $('#<portlet:namespace />displayPageNameInput');
@@ -100,8 +93,17 @@ if (Validator.isNotNull(layoutUuid)) {
 						selectedItemChange: function(event) {
 							var selectedItem = event.newVal;
 
+							assetDisplayPageIdInput.val('');
+
+							pagesContainerInput.val('');
+
 							if (selectedItem) {
-								pagesContainerInput.val(selectedItem.id);
+								if (selectedItem.type === "asset-display-page") {
+									assetDisplayPageIdInput.val(selectedItem.id);
+								}
+								else {
+									pagesContainerInput.val(selectedItem.id);
+								}
 
 								displayPageNameInput.html(selectedItem.name);
 

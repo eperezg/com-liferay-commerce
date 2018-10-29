@@ -14,6 +14,8 @@
 
 package com.liferay.commerce.product.definitions.web.internal.portlet.action;
 
+import com.liferay.asset.display.page.model.AssetDisplayPageEntry;
+import com.liferay.asset.display.page.service.AssetDisplayPageEntryLocalService;
 import com.liferay.asset.kernel.exception.AssetCategoryException;
 import com.liferay.asset.kernel.exception.AssetTagException;
 import com.liferay.asset.kernel.model.AssetEntry;
@@ -29,6 +31,8 @@ import com.liferay.commerce.product.exception.CPFriendlyURLEntryException;
 import com.liferay.commerce.product.exception.NoSuchCPDefinitionException;
 import com.liferay.commerce.product.model.CPDefinition;
 import com.liferay.commerce.product.service.CPDefinitionService;
+import com.liferay.layout.page.template.model.LayoutPageTemplateEntry;
+import com.liferay.layout.page.template.service.LayoutPageTemplateEntryLocalService;
 import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.model.TrashedModel;
 import com.liferay.portal.kernel.portlet.PortletProvider;
@@ -55,6 +59,7 @@ import com.liferay.trash.kernel.util.TrashUtil;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -407,10 +412,24 @@ public class EditCPDefinitionMVCActionCommand extends BaseMVCActionCommand {
 		long cpDefinitionId = ParamUtil.getLong(
 			actionRequest, "cpDefinitionId");
 
+		long assetDisplayPageId = ParamUtil.getLong(
+			actionRequest, "assetDisplayPageId");
+
 		String layoutUuid = ParamUtil.getString(actionRequest, "layoutUuid");
+
+		if (assetDisplayPageId != 0) {
+			layoutUuid = null;
+		}
+
+		ThemeDisplay themeDisplay = (ThemeDisplay)actionRequest.getAttribute(
+			WebKeys.THEME_DISPLAY);
 
 		ServiceContext serviceContext = ServiceContextFactory.getInstance(
 			CPDefinition.class.getName(), actionRequest);
+
+		_updateAssetDisplayPage(
+			themeDisplay.getUserId(), themeDisplay.getScopeGroupId(),
+			cpDefinitionId, assetDisplayPageId, serviceContext);
 
 		_cpDefinitionService.updateCPDisplayLayout(
 			cpDefinitionId, layoutUuid, serviceContext);
@@ -484,6 +503,46 @@ public class EditCPDefinitionMVCActionCommand extends BaseMVCActionCommand {
 			cpDefinitionId, cpTaxCategoryId, taxExempt, telcoOrElectronics);
 	}
 
+	private void _updateAssetDisplayPage(
+			long userId, long groupId, long classPK, long assetDisplayPageId,
+			ServiceContext serviceContext)
+		throws PortalException {
+
+		long classNameId = _portal.getClassNameId(CPDefinition.class);
+
+		AssetDisplayPageEntry assetDisplayPageEntry =
+			_assetDisplayPageEntryLocalService.fetchAssetDisplayPageEntry(
+				groupId, classNameId, classPK);
+
+		if (assetDisplayPageEntry == null) {
+			_assetDisplayPageEntryLocalService.addAssetDisplayPageEntry(
+				userId, groupId, classNameId, classPK, assetDisplayPageId,
+				serviceContext);
+		}
+		else {
+			_assetDisplayPageEntryLocalService.updateAssetDisplayPageEntry(
+				assetDisplayPageEntry.getAssetDisplayPageEntryId(),
+				assetDisplayPageId, assetDisplayPageEntry.getType());
+		}
+
+		if (assetDisplayPageId > 0) {
+			LayoutPageTemplateEntry layoutPageTemplateEntry =
+				_layoutPageTemplateEntryLocalService.getLayoutPageTemplateEntry(
+					assetDisplayPageId);
+
+			if (layoutPageTemplateEntry != null) {
+				layoutPageTemplateEntry.setModifiedDate(new Date());
+
+				_layoutPageTemplateEntryLocalService.
+					updateLayoutPageTemplateEntry(layoutPageTemplateEntry);
+			}
+		}
+	}
+
+	@Reference
+	private AssetDisplayPageEntryLocalService
+		_assetDisplayPageEntryLocalService;
+
 	@Reference
 	private AssetEntryLocalService _assetEntryLocalService;
 
@@ -492,6 +551,10 @@ public class EditCPDefinitionMVCActionCommand extends BaseMVCActionCommand {
 
 	@Reference
 	private CPDefinitionService _cpDefinitionService;
+
+	@Reference
+	private LayoutPageTemplateEntryLocalService
+		_layoutPageTemplateEntryLocalService;
 
 	@Reference
 	private Portal _portal;
