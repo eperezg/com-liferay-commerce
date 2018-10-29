@@ -14,7 +14,11 @@
 
 package com.liferay.commerce.product.definitions.web.internal.portlet;
 
+import com.liferay.asset.display.page.model.AssetDisplayPageEntry;
+import com.liferay.asset.display.page.service.AssetDisplayPageEntryLocalService;
+import com.liferay.asset.kernel.model.AssetEntry;
 import com.liferay.asset.kernel.model.AssetTag;
+import com.liferay.asset.kernel.service.AssetEntryLocalService;
 import com.liferay.asset.kernel.service.AssetTagLocalService;
 import com.liferay.commerce.organization.util.CommerceOrganizationHelper;
 import com.liferay.commerce.product.catalog.CPCatalogEntry;
@@ -44,6 +48,7 @@ import com.liferay.portal.kernel.util.Http;
 import com.liferay.portal.kernel.util.InheritableMap;
 import com.liferay.portal.kernel.util.ListUtil;
 import com.liferay.portal.kernel.util.Portal;
+import com.liferay.portal.kernel.util.StringUtil;
 import com.liferay.portal.kernel.util.Validator;
 
 import java.util.List;
@@ -111,6 +116,21 @@ public class ProductFriendlyURLResolver implements FriendlyURLResolver {
 
 		CPCatalogEntry cpCatalogEntry = _cpDefinitionHelper.getCPCatalogEntry(
 			cpFriendlyURLEntry.getClassPK(), locale);
+
+		AssetEntry assetEntry = _assetEntryLocalService.getEntry(
+			CPDefinition.class.getName(), cpCatalogEntry.getCPDefinitionId());
+
+		if (_hasAssetDisplayPage(assetEntry)) {
+			String requestUri = httpServletRequest.getRequestURI();
+
+			requestUri = StringUtil.replace(
+				requestUri, CPConstants.SEPARATOR_PRODUCT_URL, "/a/");
+
+			requestUri = requestUri.substring(
+				0, requestUri.lastIndexOf("/") + 1);
+
+			return requestUri + String.valueOf(assetEntry.getEntryId());
+		}
 
 		Layout layout = getProductLayout(
 			groupId, privateLayout, cpCatalogEntry.getCPDefinitionId());
@@ -252,6 +272,19 @@ public class ProductFriendlyURLResolver implements FriendlyURLResolver {
 		return _layoutLocalService.getLayout(plid);
 	}
 
+	private boolean _hasAssetDisplayPage(AssetEntry assetEntry) {
+		AssetDisplayPageEntry assetDisplayPageEntry =
+			_assetDisplayPageEntryLocalService.fetchAssetDisplayPageEntry(
+				assetEntry.getGroupId(), assetEntry.getClassNameId(),
+				assetEntry.getClassPK());
+
+		if (assetDisplayPageEntry != null) {
+			return true;
+		}
+
+		return false;
+	}
+
 	private void _initCPRulesThreadLocal(
 			long groupId, HttpServletRequest httpServletRequest)
 		throws PortalException {
@@ -288,6 +321,13 @@ public class ProductFriendlyURLResolver implements FriendlyURLResolver {
 
 		CPRulesThreadLocal.setCPRules(cpRules);
 	}
+
+	@Reference
+	private AssetDisplayPageEntryLocalService
+		_assetDisplayPageEntryLocalService;
+
+	@Reference
+	private AssetEntryLocalService _assetEntryLocalService;
 
 	@Reference
 	private AssetTagLocalService _assetTagLocalService;
